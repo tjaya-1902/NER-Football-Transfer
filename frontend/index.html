@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Football Transfer NER</title>
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <script>
+  let globalEntitiesMap = {};
+  let infoVisible = false;
+
+  async function analyzeText() {
+    const input = document.getElementById("headline").value;
+    const res = await fetch("http://127.0.0.1:5000/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: input })
+    });
+
+    const data = await res.json();
+
+    const order = ["PLAYER_NAME", "FROM_CLUB", "TO_CLUB", "TRANSFER_FEE", "TRANSFER_TYPE"];
+    globalEntitiesMap = {};
+    for (const label of order) {
+      const ent = data.find(e => e.label === label);
+      if (ent) globalEntitiesMap[label] = ent.text;
+    }
+
+    const output = document.getElementById("output");
+    output.innerHTML = "";
+
+    if (Object.keys(globalEntitiesMap).length === 0) {
+      output.innerHTML = `<div class="alert alert-warning">No entities recognized in the input.</div>`;
+      return;
+    }
+
+    output.innerHTML = `<div class="row" id="entity-row"></div>`;
+    const entityRow = document.getElementById("entity-row");
+
+    for (const label of order) {
+      if (globalEntitiesMap[label]) {
+        let extraButton = "";
+        let extraDiv = "";
+
+        if (label === "PLAYER_NAME") {
+          extraDiv = `<div id="player-info" class="mt-2"></div>`;
+        } else if (label === "FROM_CLUB" || label === "TO_CLUB") {
+          const divId = `${label.toLowerCase()}-info`;
+          extraDiv = `<div id="${divId}" class="mt-2"></div>`;
+        }
+
+        entityRow.innerHTML += `
+          <div class="col-md-4 mb-3">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title">${label.replace("_", " ")}</h5>
+                <p class="card-text">${globalEntitiesMap[label]}</p>
+                ${extraButton}
+                ${extraDiv}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    document.getElementById("toggle-info-btn").disabled = false;
+    document.getElementById("toggle-info-btn").textContent = "Show More Info";
+    infoVisible = false;
+  }
+
+  async function fetchPlayerInfo(playerName) {
+    const res = await fetch("http://127.0.0.1:5000/player_info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ player: playerName })
+    });
+
+    const data = await res.json();
+    const container = document.getElementById("player-info");
+
+    if (data.error) {
+      container.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+    } else {
+      container.innerHTML = `
+        <div class="card mt-2">
+          <div class="card-body text-center">
+            <img src="${data.photo}" alt="Player photo" style="height: 120px;" class="mb-3">
+            <ul class="list-group text-start">
+              <li class="list-group-item"><strong>Nationality:</strong> ${data.nationality}</li>
+              <li class="list-group-item"><strong>Date of Birth (Age):</strong> ${data.date_of_birth} (${data.age})</li>
+              <li class="list-group-item"><strong>Position:</strong> ${data.position}</li>
+              <li class="list-group-item"><strong>Height / Weight:</strong> ${data.height} / ${data.weight}</li>
+            </ul>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  async function fetchClubInfo(clubName, containerId) {
+    const res = await fetch("http://127.0.0.1:5000/club_info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ club: clubName })
+    });
+
+    const data = await res.json();
+    const container = document.getElementById(containerId);
+
+    if (data.error) {
+      container.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+    } else {
+      container.innerHTML = `
+        <div class="card mt-2">
+          <div class="card-body text-center">
+            <img src="${data.logo}" style="height: 120px;" class="mb-3">
+            <ul class="list-group text-start">
+              <li class="list-group-item"><strong>City & Country:</strong> ${data.city_country}</li>
+              <li class="list-group-item"><strong>Founded:</strong> ${data.founded}</li>
+              <li class="list-group-item"><strong>Stadium:</strong> ${data.venue}</li>
+            </ul>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  async function toggleInfo() {
+    const btn = document.getElementById("toggle-info-btn");
+
+    if (!infoVisible) {
+      if (globalEntitiesMap["PLAYER_NAME"]) {
+        await fetchPlayerInfo(globalEntitiesMap["PLAYER_NAME"]);
+      }
+      if (globalEntitiesMap["FROM_CLUB"]) {
+        await fetchClubInfo(globalEntitiesMap["FROM_CLUB"], "from_club-info");
+      }
+      if (globalEntitiesMap["TO_CLUB"]) {
+        await fetchClubInfo(globalEntitiesMap["TO_CLUB"], "to_club-info");
+      }
+      btn.textContent = "Hide Info";
+      infoVisible = true;
+    } else {
+      const ids = ["player-info", "from_club-info", "to_club-info"];
+      for (const id of ids) {
+        const div = document.getElementById(id);
+        if (div) div.innerHTML = "";
+      }
+      btn.textContent = "Show More Info";
+      infoVisible = false;
+    }
+  }
+  </script>
+</head>
+<body class="p-4">
+  <h1 class="text-center mb-4">NER - Football Transfer Headline</h1>
+  <input type="text" id="headline" placeholder="Enter transfer headline..." size="80" class="form-control mb-3 mx-auto d-block">
+  <div class="mb-3 d-flex justify-content-center">
+    <button onclick="analyzeText()" class="btn btn-primary me-2">Analyze</button>
+    <button onclick="toggleInfo()" class="btn btn-success" id="toggle-info-btn" disabled>Show More Info</button>
+  </div>
+  <div id="output"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
