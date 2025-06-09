@@ -10,4 +10,4 @@ The model is trained using synthetic transfer headlines as well as transfer head
 The model is deployed on a html page that allows users to input a transfer headline and identify the entities.
 Additionally, users can retrieve detailed information about the identified player and clubs. This information is dynamically fetched from the API-Football service.
 
-<img src="images/example.png" width="600"/>
+<img src="images/example.png"/>
